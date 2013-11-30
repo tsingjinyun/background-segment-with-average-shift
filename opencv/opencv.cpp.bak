@@ -1,0 +1,77 @@
+﻿#include "StdAfx.h"
+#include "cv.h"
+#include "highgui.h"
+#include <stdio.h>
+
+CvSeq* point_seq = 0;
+IplImage* canvas = 0;
+CvScalar* colors = 0;
+int pos = 10;
+
+int is_equal( const void* _a, const void* _b, void* userdata )
+{
+CvPoint a = *(const CvPoint*)_a;
+CvPoint b = *(const CvPoint*)_b;
+double threshold = *(double*)userdata;
+return (double)(a.x - b.x)*(a.x - b.x) + (double)(a.y - b.y)*(a.y - b.y) <= threshold;
+}
+
+void on_track( int pos )
+{
+CvSeq* labels = 0; //声明输出标签
+double threshold = pos*pos; //定义阈值为pos^2
+int i, class_count = cvSeqPartition( point_seq, 0, &labels, is_equal, &threshold );
+//对point_seq点序列拆分为等效的类，条件是(Ax-Bx)^2+(Ay-By)^2<=pos^2
+//含义为两点相差距离小于pos的属于一类
+printf("%4d classes/n", class_count );
+//打印出分了几类
+cvZero( canvas );
+
+for( i = 0; i < labels->total; i++ )
+{	//取点、取颜色，画圆,你可以用按任意键的方式一个点一个点的画
+	CvPoint pt = *(CvPoint*)cvGetSeqElem( point_seq, i );
+	CvScalar color = colors[*(int*)cvGetSeqElem( labels, i )];
+	cvCircle( canvas, pt, 1, color, -1 );
+	cvShowImage( "points", canvas );
+	cvWaitKey(0);
+	}
+
+}
+
+
+int main( int argc, char** argv )
+{
+	CvMemStorage* storage = cvCreateMemStorage(0);//建立了一个存储器
+	point_seq = cvCreateSeq( CV_32SC2, sizeof(CvSeq), sizeof(CvPoint), storage );
+	//建立了一个32位整型序列
+	CvRNG rng = cvRNG(0xffffffff);//初始化随机数生成器
+
+	int width = 500, height = 500;//定义图像的长和宽
+	int i, count = 1000;//定义了两个计数器
+	canvas = cvCreateImage( cvSize(width,height), 8, 3 );
+	//设置图像，大小为500*500，色深8，三通道
+
+	colors = (CvScalar*)cvAlloc( count*sizeof(colors[0]) );
+	//分配1000个CvScalar大小的内存缓冲区
+	for( i = 0; i < count; i++ )
+	{
+	CvPoint pt;//设置一个点
+	int icolor;//定义颜色标的
+	pt.x = cvRandInt( &rng ) % width;//随机产生点的x坐标
+	pt.y = cvRandInt( &rng ) % height;//随机产生点的y坐标
+	cvSeqPush( point_seq, &pt );//添加这个点到序列的尾部
+	icolor = cvRandInt( &rng ) +0xa0a0a0a0 ;
+	//用随机的方法给颜色标的一个基准，后边加的那个数字是可以任意的。
+	colors[i] = CV_RGB(icolor & 255, (icolor >> 8)&255, (icolor >> 16)&255);
+	//把这个点的颜色完全写入标量容器colors中
+	}
+
+	cvNamedWindow( "points", 1 );//创建窗口
+	cvCreateTrackbar( "threshold", "points", &pos, 50, on_track );
+	//建立拖动条，名称为threshold，窗口的名字叫points，创建初始化值取自pos，
+	//回调函数名称为on_track
+	on_track(pos);//监视拖动条的改变并处理之
+	cvWaitKey(0);
+	return 0;
+
+}
